@@ -16,20 +16,20 @@ export async function POST(req) {
   try {
     await connectDB();
 
-    // Extract product data from request - note: expiryDatez typo fixed to expiryDate
+    // frontend-ees JSON body ilgeesen medeelliig avch baina
     const { productId, manufactureDate, expiryDate, imageUrl } = await req.json();
 
-    // Validate that all required fields are provided
+    // shaardlagatai medeelliig shalgah
     if (!productId || !manufactureDate || !expiryDate) {
       return new Response(JSON.stringify({ error: "Мэдээлэл дутуу" }), { status: 400 });
     }
 
-    // Validate that expiry date is after manufacture date
+    // ognoonuudiig shalgah
     if (new Date(expiryDate) <= new Date(manufactureDate)) {
       return new Response(JSON.stringify({ error: "Дуусах огноо буруу байна" }), { status: 400 });
     }
 
-    // Create new product with productId, dates, and imageUrl (imageUrl is optional)
+    // shineer product uusgeh
     const product = await Product.create({ productId, manufactureDate, expiryDate, imageUrl });
 
     return new Response(JSON.stringify(product), { status: 201 });
