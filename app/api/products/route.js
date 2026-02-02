@@ -16,17 +16,21 @@ export async function POST(req) {
   try {
     await connectDB();
 
-    const { productId, manufactureDate, expiryDate } = await req.json();
+    // frontend-ees JSON body ilgeesen medeelliig avch baina
+    const { productId, manufactureDate, expiryDate, imageUrl } = await req.json();
 
+    // shaardlagatai medeelliig shalgah
     if (!productId || !manufactureDate || !expiryDate) {
       return new Response(JSON.stringify({ error: "Мэдээлэл дутуу" }), { status: 400 });
     }
 
+    // ognoonuudiig shalgah
     if (new Date(expiryDate) <= new Date(manufactureDate)) {
       return new Response(JSON.stringify({ error: "Дуусах огноо буруу байна" }), { status: 400 });
     }
 
-    const product = await Product.create({ productId, manufactureDate, expiryDate });
+    // shineer product uusgeh
+    const product = await Product.create({ productId, manufactureDate, expiryDate, imageUrl });
 
     return new Response(JSON.stringify(product), { status: 201 });
   } catch (err) {
