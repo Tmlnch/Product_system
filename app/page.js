@@ -1,243 +1,360 @@
 "use client";
 import { useState, useEffect } from "react";
-import styles from "./Home.module.css"; 
+import Link from "next/link";
 
 export default function Home() {
+  // Name (useriin ner) localStorage-aas avna
+  const [name, setName] = useState("");
 
-// ❌ WITHOUT useState - data lost after render
-// function Home() {
-//   let productId = "";
-// When page re-renders, productId resets to ""!
-// }
+  // Product list (API-aas irsen buteegdehuunuud)
   const [products, setProducts] = useState([]);
+
+  // Form fields
   const [productId, setProductId] = useState("");
-  const [mDate, setMDate] = useState("");
-  const [eDate, setEDate] = useState("");
+  const [mDate, setMDate] = useState(""); // manufactureDate
+  const [eDate, setEDate] = useState(""); // expiryDate
+
+  // UI error message
   const [error, setError] = useState("");
-  // image file hadgalah state
+
+  // Image upload state
   const [imageFile, setImageFile] = useState(null);
-  // image upload hiij baigaa esehiig hadgalah state
   const [uploading, setUploading] = useState(false);
-  // image URL hadgalah state
   const [uploadedImageUrl, setUploadedImageUrl] = useState("");
 
+  // Helper: localStorage-aas JWT token avna
+  const getToken = () => localStorage.getItem("token");
+
+  // Init: token + name baigaa esehiig shalgaj, baival products unshina
+  useEffect(() => {
+    const token = getToken();
+    const storedName = localStorage.getItem("name");
+
+    // Hervee token esvel name baihgui bol login ruu shiljine
+    if (!token || !storedName) {
+      window.location.href = "/login";
+      return;
+    }
+
+    // LocalStorage deer bga name-iig state ruu oruulna
+    setName(storedName);
+
+    // Product list avna
+    loadProducts();
+  }, []);
+
+  // Function: product list-iig /api/products endpoint-ees avch state ruu hiine
   const loadProducts = async () => {
     try {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products", {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+
       const data = await res.json();
-      setProducts(data);
+
+      // Hamgaalalt: data array bish bol empty array bolgono
+      setProducts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
+      setProducts([]);
     }
   };
 
+  // Function: product nemeh (imageUrl bol uploadedImageUrl-iig ashiglaj bolno)
   const addProduct = async () => {
+    // Basic validation
     if (!productId || !mDate || !eDate) {
-      setError("Бүх талбарыг бөглөнө үү");
+      setError("Buh talbaryg boglono uu");
       return;
     }
+
+    // Date validation: expiryDate ni manufactureDate-aas hoish baih yostoi
     if (new Date(eDate) <= new Date(mDate)) {
-      setError("Дуусах огноо буруу байна");
+      setError("Duusah ognoo buruu baina");
       return;
     }
+
     setError("");
 
     try {
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
         body: JSON.stringify({
           productId,
           manufactureDate: mDate,
           expiryDate: eDate,
-          // upload hiisen bol image URL oruulna
           imageUrl: uploadedImageUrl || null,
         }),
       });
 
+      const data = await res.json();
+
+      // Amjilttai bol form-iig tseverleed list-iig dahin unshina
       if (res.status === 201) {
         setProductId("");
         setMDate("");
         setEDate("");
-        // amjilttai product uusgesen daraa image file, URL arilgah
         setImageFile(null);
         setUploadedImageUrl("");
         loadProducts();
       } else {
-        const data = await res.json();
-        setError(data.error || "Алдаа гарлаа");
+        setError(data.error || "Aldaa garlaa");
       }
     } catch (err) {
       console.error(err);
-      setError("Серверийн алдаа");
+      setError("Serveriin aldaa");
     }
   };
 
-  // image file songoh
+  // Function: file input-oos zurag songoh uyd validate hiine
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
+
+    // Zuvhun image file songoson esehiig shalgana
     if (file && file.type.startsWith("image/")) {
       setImageFile(file);
       setError("");
-    } else if (file) {
-      setError("заавал зураг файл байх ёстой");
+    } else {
       setImageFile(null);
+      setError("Zuvhun zurag file songono uu");
     }
   };
 
-  // imageFile state-s avch server ruu ilgeene
+  // Function: songoson zurgiig server ruu upload hiij, imageUrl butsaaj avna
   const handleImageUpload = async () => {
-    // Validate that an image file is selected and productId is provided
+    // Upload hiihiin umnu productId + imageFile zaaval baih yostoi
     if (!imageFile || !productId) {
-      setError("Зураг сонгож, Product ID оруулна уу");
+      setError("Product ID bolon zurag shaardlagatai");
       return;
     }
 
-    // Set uploading state to true to show loading feedback
     setUploading(true);
-    
+
     try {
-      // Create FormData to send the image file and productId
+      // multipart/form-data bolgoh
       const formData = new FormData();
       formData.append("image", imageFile);
       formData.append("productId", productId);
 
-      // Send the image upload request to the server
+      // Upload endpoint ruu yavuulna
       const res = await fetch("/api/products/upload", {
         method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
         body: formData,
       });
 
-      // Parse response data from the server
       const data = await res.json();
 
+      // Amjilttai bol imageUrl-iig state ruu hadgalna
       if (res.status === 200) {
-        // Extract and store the image URL from successful response
         setUploadedImageUrl(data.product.imageUrl);
-        // Clear the image file after successful upload
         setImageFile(null);
         setError("");
-        // Show success message to user
-        alert("Зураг амжилттай байршуулсан");
+        alert("Zurag amjilttai bairshuulsan");
       } else {
-        // Show error message if upload failed
-        setError(data.error || "Зураг байршуулахад алдаа гарлаа");
+        setError(data.error || "Zurag bairshuulahad aldaa garlaa");
       }
     } catch (err) {
       console.error(err);
-      setError("Серверийн алдаа");
+      setError("Serveriin aldaa");
     } finally {
-      // Reset uploading state after upload completes
       setUploading(false);
     }
   };
 
-  useEffect(() => { loadProducts(); }, []);
+  // Function: logout hiij localStorage-aas medeelliig ustgaad login ruu shiljine
+  const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("name");
+    window.location.href = "/login";
+  };
 
   return (
-    <main className={styles.container}>
-      <h1 className={styles.title}>📦 Product System</h1>
-
-      <div className={styles.form}>
-        {error && <p className={styles.error}>{error}</p>}
-
-        <div className={styles.inputGroup}>
-          <label>Product ID:</label>
-          <input
-            placeholder="Product ID"
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-          />
-        </div>
-
-        <div className={styles.inputGroup}>
-          <label>Үйлдвэрлэсэн огноо:</label>
-          <input
-            type="date"
-            value={mDate}
-            onChange={(e) => setMDate(e.target.value)}
-          />
-        </div>
-
-        <div className={styles.inputGroup}>
-          <label>Дуусах хугацаа:</label>
-          <input
-            type="date"
-            value={eDate}
-            onChange={(e) => setEDate(e.target.value)}
-          />
-        </div>
-
-        <div className={styles.inputGroup}>
-          <label>Бүтээгдэхүүний зураг:</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-          />
-          {imageFile && <p style={{ fontSize: "12px", color: "#666" }}>Сонгосон: {imageFile.name}</p>}
-        </div>
-
-        {imageFile && (
-          <button 
-            className={styles.button} 
-            onClick={handleImageUpload}
-            disabled={uploading}
-          >
-            {uploading ? "Байршуулаж байна..." : "Зураг байршуулах"}
-          </button>
-        )}
-
-        {uploadedImageUrl && (
-          <div className={styles.inputGroup}>
-            <p style={{ color: "green", fontWeight: "bold" }}>✓ Зураг байршуулсан</p>
-            <img 
-              src={uploadedImageUrl} 
-              alt="Preview" 
-              style={{ maxWidth: "150px", maxHeight: "150px", marginTop: "10px" }}
-            />
+    <div className="min-h-screen bg-gray-100">
+      <div className="max-w-6xl mx-auto px-6 py-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">📦 Product System</h1>
+            <p className="text-sm text-gray-500 mt-1">Бүтээгдэхүүний бүртгэл ба хяналт</p>
           </div>
-        )}
 
-        <button className={styles.button} onClick={addProduct}>Бүтээгдэхүүн нэмэх</button>
+         <div className="flex items-center gap-4">
+  <div className="text-right">
+    <div className="text-xs text-gray-500">Нэвтэрсэн хэрэглэгч</div>
+    <div className="font-semibold text-gray-900">{name}</div>
+  </div>
+  <Link
+    href="/viewlogs"
+    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+  >
+    View Logs
+  </Link>
+
+  <button
+    onClick={logout}
+    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+  >
+    Гарах
+  </button>
+</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Бүтээгдэхүүн нэмэх</h2>
+            {error && (
+              <span className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full">
+                {error}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-gray-600">Product ID</label>
+              <input
+                className="mt-1 w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Жишээ: P011"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">Зураг файл</label>
+              <input
+                className="mt-1 w-full border border-gray-300 rounded-lg p-3 bg-white"
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">Үйлдвэрлэсэн огноо</label>
+              <input
+                className="mt-1 w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="date"
+                value={mDate}
+                onChange={(e) => setMDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">Дуусах огноо</label>
+              <input
+                className="mt-1 w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="date"
+                value={eDate}
+                onChange={(e) => setEDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {imageFile && (
+                <button
+                  onClick={handleImageUpload}
+                  disabled={uploading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-60"
+                >
+                  {uploading ? "Байршуулж байна..." : "Зураг байршуулах"}
+                </button>
+              )}
+
+              {uploadedImageUrl && (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={uploadedImageUrl}
+                    alt="preview"
+                    className="w-14 h-14 object-cover rounded-lg border"
+                  />
+                  <span className="text-sm text-green-600 font-medium">✓ Зураг бэлэн</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={addProduct}
+              className="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition w-full md:w-auto"
+            >
+              Бүтээгдэхүүн нэмэх
+            </button>
+          </div>
+        </div>
+
+       
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Бүтээгдэхүүний жагсаалт</h2>
+            <p className="text-sm text-gray-500 mt-1">ID дээр дарж дэлгэрэнгүй рүү орно</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+             
+              <thead className="bg-gray-50 text-gray-600 text-sm">
+                <tr>
+                  <th className="p-3 text-center font-semibold">ID</th>
+                  <th className="p-3 text-center font-semibold">Үйлдвэрлэсэн</th>
+                  <th className="p-3 text-center font-semibold">Дуусах</th>
+                  <th className="p-3 text-center font-semibold">Зураг</th>
+                </tr>
+              </thead>
+
+              <tbody className="text-sm">
+                {products.length > 0 ? (
+                  products.map((p) => (
+                    <tr key={p._id} className="border-t hover:bg-gray-50 transition">
+            
+                      <td className="p-3 text-center">
+                        <Link
+                          href={`/products/${p._id}`}
+                          className="text-blue-600 hover:underline font-medium"
+                        >
+                          {p.productId}
+                        </Link>
+                      </td>
+
+                      <td className="p-3 text-center text-gray-700">
+                        {new Date(p.manufactureDate).toLocaleDateString()}
+                      </td>
+
+                      <td className="p-3 text-center text-gray-700">
+                        {new Date(p.expiryDate).toLocaleDateString()}
+                      </td>
+
+                    
+                      <td className="p-3 text-center">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.productId}
+                            className="w-12 h-12 object-cover rounded-lg border mx-auto"
+                          />
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="p-6 text-center text-gray-500" colSpan={4}>
+                      Бүтээгдэхүүн олдсонгүй
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="h-6" />
       </div>
-
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Product ID</th>
-            <th>Үйлдвэрлэсэн огноо</th>
-            <th>Дуусах огноо</th>
-            <th>Зураг</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.length > 0 ? (
-            products.map((p) => (
-              <tr key={p._id}>
-                <td>{p.productId}</td>
-                <td>{new Date(p.manufactureDate).toLocaleDateString()}</td>
-                <td>{new Date(p.expiryDate).toLocaleDateString()}</td>
-                <td>
-                  {p.imageUrl ? (
-                    <img 
-                      src={p.imageUrl} 
-                      alt={p.productId}
-                      style={{ width: "50px", height: "50px", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <span style={{ color: "#999" }}>Зураг байхгүй</span>
-                  )}
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="4" style={{ textAlign: "center" }}>Бүтээгдэхүүн олдсонгүй</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </main>
+    </div>
   );
 }

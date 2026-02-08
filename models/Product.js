@@ -6,7 +6,7 @@ const ProductSchema = new mongoose.Schema(
     manufactureDate: { type: Date, required: true },
     expiryDate: { type: Date, required: true },
     // imageUrl nemj ugsun
-    imageUrl: { type: String, default: null },
+    imageUrl: { type: String, default: null }
   },
 );
 
